@@ -1,17 +1,16 @@
 name: Release
 
 on:
-  push:
-    branches:
-      - master
+  schedule:
+    - cron: "0 9 */3 * *"   # roughly every 3 days, 09:00 UTC
+  workflow_dispatch:         # manual "release now" button
 
 concurrency:
-  group: release-${{ github.workflow }}
+  group: release
   cancel-in-progress: false
 
 permissions:
   contents: write
-  pull-requests: write
   id-token: write
 
 jobs:
@@ -36,13 +35,29 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      # Opens/updates the "Version Packages" PR; when that PR is merged
-      # (no changesets left, version bumped) it runs `changeset publish`,
-      # which publishes via npm using OIDC + automatic provenance.
-      - name: Create release PR or publish
-        uses: changesets/action@v1
-        with:
-          version: bunx changeset version
-          publish: bunx changeset publish
+      - name: Check for pending changesets
+        id: check
+        run: |
+          if ls .changeset/*.md 2>/dev/null | grep -qv README; then
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Consumes changesets: bumps the version in package.json and writes CHANGELOG.md.
+      - name: Version + changelog
+        if: steps.check.outputs.release == 'true'
+        run: |
+          bunx changeset version
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "chore: release"
+          git push
+
+      # Publishes to npm via OIDC + automatic provenance and pushes tags.
+      - name: Publish to npm
+        if: steps.check.outputs.release == 'true'
+        run: |
+          bunx changeset publish
+          git push --tags
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

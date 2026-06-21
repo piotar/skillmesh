@@ -1,6 +1,17 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "config:recommended"
+    "config:recommended",
+    "schedule:weekly"
+  ],
+  "platformAutomerge": true,
+  "minimumReleaseAge": "3 days",
+  "internalChecksFilter": "strict",
+  "packageRules": [
+    {
+      "description": "Automerge all dependencies once CI passes",
+      "matchPackageNames": ["*"],
+      "automerge": true
+    }
   ]
 }
