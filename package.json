@@ -1,6 +1,6 @@
 {
   "name": "skillmesh",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A registry and manager for AI agent skills — install, update, link and compose skills (presets) from git, npm and local sources, following the agentskills.io standard.",
   "type": "module",
   "license": "MIT",
