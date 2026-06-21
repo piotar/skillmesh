@@ -1,7 +1,8 @@
 #!/usr/bin/env bun
 /** skillmesh CLI entry point — wires domain commands into the citty command tree. */
 
-import { defineCommand, runMain } from "citty";
+import { defineCommand, runCommand, runMain, showUsage } from "citty";
+import * as p from "@clack/prompts";
 import { pkg } from "../constants";
 import { addCommand } from "./commands/add";
 import { authCommand } from "./commands/auth";
@@ -56,18 +57,46 @@ function selfManages(argv: string[]): boolean {
   return sub !== "upgrade" && sub !== "self-update";
 }
 
+/** Print a failure as a clean one-line message (full stack only under SKILLMESH_DEBUG). */
+function printError(err: unknown): void {
+  if (process.env.SKILLMESH_DEBUG && err instanceof Error) {
+    console.error(err.stack ?? err.message);
+  } else {
+    p.log.error(err instanceof Error ? err.message : String(err));
+  }
+}
+
 async function run(): Promise<void> {
   const argv = process.argv.slice(2);
+  const wantsUsage = argv.some((a) => ["--help", "-h", "--version", "-v"].includes(a));
 
   // The startup check may auto-upgrade and replace this process before the command runs; otherwise
-  // it hands back a notice to show afterwards. runMain resolves on success and process.exit(1)s on
-  // error, so the notice only follows a clean run.
+  // it hands back a notice to show afterwards (only after a clean run).
   const { notice } = selfManages(argv) ? await startupSelfManage() : {};
   // Register enabled plugins' source adapters/importers before dispatch so commands like add/sync/
   // update/import can use them. Best-effort: a broken plugin warns and is skipped, never throwing.
   await loadEnabledPlugins();
-  await runMain(main);
+
+  // citty's runMain prints a full stack trace for any failure; route normal dispatch through
+  // runCommand so expected errors (empty cache, no TTY, missing skill, …) surface as a clean
+  // one-liner. Delegate only the builtin --help/--version banners to runMain.
+  if (wantsUsage) {
+    await runMain(main, { rawArgs: argv });
+  } else {
+    try {
+      await runCommand(main, { rawArgs: argv });
+    } catch (err) {
+      // CLIError (unknown/no command, bad args) reads better alongside the usage banner.
+      if (err instanceof Error && err.name === "CLIError") await showUsage(main);
+      printError(err);
+      process.exit(1);
+    }
+  }
+
   if (notice) printNotice(notice);
 }
 
-void run();
+void run().catch((err: unknown) => {
+  printError(err);
+  process.exit(1);
+});

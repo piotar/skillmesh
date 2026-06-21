@@ -4,6 +4,7 @@ import { defineCommand } from "citty";
 import * as p from "@clack/prompts";
 import { type StoreListing, listStoreEntries, removeFromStore } from "../../store/store";
 import { describeSource } from "../describeSource";
+import { pickCachedNames } from "../pickers";
 
 /** Group listings by skill name, preserving the input's version ordering. */
 function groupByName(entries: StoreListing[]): Map<string, StoreListing[]> {
@@ -37,27 +38,33 @@ const listSub = defineCommand({
   },
 });
 
+/** Parse a `name` or `name@version` target into its parts. */
+function parseTarget(skill: string): { name: string; version?: string } {
+  const at = skill.lastIndexOf("@");
+  return at > 0 ? { name: skill.slice(0, at), version: skill.slice(at + 1) } : { name: skill };
+}
+
 const removeSub = defineCommand({
-  meta: { name: "remove", description: "Remove a cached skill from the store (by name, or name@version)" },
+  meta: { name: "remove", description: "Remove cached skills from the store (by name or name@version; omit to pick)" },
   args: {
-    skill: { type: "positional", required: true, description: "Skill name, or name@version to target one version" },
+    skill: { type: "positional", required: false, description: "Skill name, or name@version (omit to pick interactively)" },
   },
   async run({ args }) {
-    const at = args.skill.lastIndexOf("@");
-    const hasVersion = at > 0;
-    const name = hasVersion ? args.skill.slice(0, at) : args.skill;
-    const version = hasVersion ? args.skill.slice(at + 1) : undefined;
+    // Omit the target → multi-select cached skill names (each removes all of its versions).
+    const targets: { name: string; version?: string }[] = args.skill
+      ? [parseTarget(args.skill)]
+      : (await pickCachedNames()).map((name) => ({ name }));
 
-    const matches = (await listStoreEntries()).filter(
-      (e) => e.name === name && (version === undefined || e.version === version),
-    );
-    if (matches.length === 0) {
-      p.log.warn(`No cached skill matches '${args.skill}'.`);
-      return;
+    const entries = await listStoreEntries();
+    for (const { name, version } of targets) {
+      const matches = entries.filter((e) => e.name === name && (version === undefined || e.version === version));
+      if (matches.length === 0) {
+        p.log.warn(`No cached skill matches '${version ? `${name}@${version}` : name}'.`);
+        continue;
+      }
+      for (const match of matches) await removeFromStore(match.name, match.version);
+      p.log.success(`Removed ${matches.length} cached version(s) of '${name}'.`);
     }
-
-    for (const match of matches) await removeFromStore(match.name, match.version);
-    p.log.success(`Removed ${matches.length} cached version(s) of '${name}'.`);
   },
 });
 

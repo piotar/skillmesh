@@ -17,6 +17,7 @@ import { parseSource } from "../../sources/resolve";
 import { type StoreListing, listStoreEntries } from "../../store/store";
 import { pickCachedSkills } from "../cachePicker";
 import { describeSource } from "../describeSource";
+import { pickPreset } from "../pickers";
 import { interactiveResolveName } from "../prompts";
 import { parseMode, withOverrides } from "../sourceArgs";
 import type { SourceSpec } from "../../types";
@@ -108,57 +109,61 @@ const addSub = defineCommand({
 });
 
 const removeSub = defineCommand({
-  meta: { name: "remove", description: "Remove sources from a preset (omit source to pick interactively)" },
+  meta: { name: "remove", description: "Remove sources from a preset (omit preset/source to pick interactively)" },
   args: {
-    name: { type: "positional", required: true, description: "Preset name" },
+    name: { type: "positional", required: false, description: "Preset name (omit to pick)" },
     source: { type: "positional", required: false, description: "Skill source to remove (omit to pick)" },
     ref: { type: "string", description: "Git/GitHub ref" },
     path: { type: "string", description: "Subdirectory within the source" },
   },
   async run({ args }) {
+    const name = args.name ?? (await pickPreset("Select a preset to remove sources from"));
+
     // No source given: pick one or more of the preset's current sources to remove.
     if (!args.source) {
-      for (const source of await pickPresetSources(args.name)) {
-        await removeSourceFromPreset(args.name, source);
-        p.log.success(`Removed ${describeSource(source)} from '${args.name}'`);
+      for (const source of await pickPresetSources(name)) {
+        await removeSourceFromPreset(name, source);
+        p.log.success(`Removed ${describeSource(source)} from '${name}'`);
       }
       return;
     }
 
     const source = withOverrides(parseSource(args.source), args.ref, args.path);
-    const preset = await removeSourceFromPreset(args.name, source);
+    const preset = await removeSourceFromPreset(name, source);
     if (preset.sources.some((s) => sourceEquals(s, source))) {
-      p.log.warn(`Source not found in preset '${args.name}'`);
+      p.log.warn(`Source not found in preset '${name}'`);
     } else {
-      p.log.success(`Removed ${describeSource(source)} from '${args.name}'`);
+      p.log.success(`Removed ${describeSource(source)} from '${name}'`);
     }
   },
 });
 
 const deleteSub = defineCommand({
-  meta: { name: "delete", description: "Delete a preset" },
-  args: { name: { type: "positional", required: true, description: "Preset name" } },
+  meta: { name: "delete", description: "Delete a preset (omit name to pick)" },
+  args: { name: { type: "positional", required: false, description: "Preset name (omit to pick)" } },
   async run({ args }) {
-    await removePreset(args.name);
-    p.log.success(`Deleted preset '${args.name}'`);
+    const name = args.name ?? (await pickPreset("Select a preset to delete"));
+    await removePreset(name);
+    p.log.success(`Deleted preset '${name}'`);
   },
 });
 
 const applySub = defineCommand({
-  meta: { name: "apply", description: "Add all of a preset's skills to the active project" },
+  meta: { name: "apply", description: "Add all of a preset's skills to the active project (omit name to pick)" },
   args: {
-    name: { type: "positional", required: true, description: "Preset name" },
+    name: { type: "positional", required: false, description: "Preset name (omit to pick)" },
     mode: { type: "string", description: "Install mode: 'link' (default) or 'copy'" },
     local: { type: "boolean", description: "Keep added skills local-only" },
   },
   async run({ args }) {
     const projectPath = await resolveActiveProject();
     const mode = parseMode(args.mode);
+    const name = args.name ?? (await pickPreset("Select a preset to apply"));
 
-    p.intro(`skillmesh preset apply ${args.name}`);
+    p.intro(`skillmesh preset apply ${name}`);
     const result = await applyPreset({
       projectPath,
-      preset: args.name,
+      preset: name,
       ...(mode ? { mode } : {}),
       ...(args.local ? { scope: "local" as const } : {}),
       resolveName: interactiveResolveName,

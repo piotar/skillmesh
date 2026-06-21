@@ -10,6 +10,7 @@ import {
   removePlugin,
 } from "../../plugin/manage";
 import { parseSource } from "../../sources/resolve";
+import { pickPlugins } from "../pickers";
 import { withOverrides } from "../sourceArgs";
 
 const addSub = defineCommand({
@@ -52,29 +53,38 @@ const listSub = defineCommand({
 });
 
 const enableSub = defineCommand({
-  meta: { name: "enable", description: "Enable an installed plugin" },
-  args: { name: { type: "positional", required: true, description: "Plugin name" } },
+  meta: { name: "enable", description: "Enable installed plugins (omit name to pick)" },
+  args: { name: { type: "positional", required: false, description: "Plugin name (omit to pick)" } },
   async run({ args }) {
-    await enablePlugin(args.name);
-    p.log.success(`Enabled '${args.name}'`);
+    const names = args.name ? [args.name] : await pickPlugins("Select plugins to enable", "disabled");
+    for (const name of names) {
+      await enablePlugin(name);
+      p.log.success(`Enabled '${name}'`);
+    }
   },
 });
 
 const disableSub = defineCommand({
-  meta: { name: "disable", description: "Disable a plugin without removing it" },
-  args: { name: { type: "positional", required: true, description: "Plugin name" } },
+  meta: { name: "disable", description: "Disable plugins without removing them (omit name to pick)" },
+  args: { name: { type: "positional", required: false, description: "Plugin name (omit to pick)" } },
   async run({ args }) {
-    await disablePlugin(args.name);
-    p.log.success(`Disabled '${args.name}'`);
+    const names = args.name ? [args.name] : await pickPlugins("Select plugins to disable", "enabled");
+    for (const name of names) {
+      await disablePlugin(name);
+      p.log.success(`Disabled '${name}'`);
+    }
   },
 });
 
 const removeSub = defineCommand({
-  meta: { name: "remove", description: "Remove a plugin from the ecosystem" },
-  args: { name: { type: "positional", required: true, description: "Plugin name" } },
+  meta: { name: "remove", description: "Remove plugins from the ecosystem (omit name to pick)" },
+  args: { name: { type: "positional", required: false, description: "Plugin name (omit to pick)" } },
   async run({ args }) {
-    await removePlugin(args.name);
-    p.log.success(`Removed '${args.name}'`);
+    const names = args.name ? [args.name] : await pickPlugins("Select plugins to remove");
+    for (const name of names) {
+      await removePlugin(name);
+      p.log.success(`Removed '${name}'`);
+    }
   },
 });
 

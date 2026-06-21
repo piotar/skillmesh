@@ -1,5 +1,9 @@
 # skillmesh
 
+[![npm version](https://img.shields.io/npm/v/skillmesh.svg)](https://www.npmjs.com/package/skillmesh)
+[![license: MIT](https://img.shields.io/npm/l/skillmesh.svg)](./LICENSE)
+[![node: >=18](https://img.shields.io/node/v/skillmesh.svg)](https://nodejs.org)
+
 A registry and manager for **AI agent skills** — install, update, link and compose skills
 (presets) from git, npm, GitHub and local paths, following the
 [agentskills.io](https://agentskills.io) standard.
@@ -15,17 +19,21 @@ themselves ever land in it).
 Runs on **Node (≥18) or [Bun](https://bun.com)**. `git` and `npm` are used only when fetching from
 those sources; `tar` (bsdtar, bundled with Windows 10+/macOS/Linux) is used for archives.
 
-```bash
-bun install
-bun run build       # bundle the CLI into dist/index.js
-node ./dist/index.js <command>   # run the built CLI under Node
-```
-
-For development you can run the TypeScript entry directly with Bun (no build step):
+Install the CLI globally with whichever package manager you use — `skillmesh upgrade` later updates
+it the same way:
 
 ```bash
-bun run ./src/cli/index.ts <command>
+npm install -g skillmesh     # or: bun add -g skillmesh / pnpm add -g skillmesh / yarn global add skillmesh
+skillmesh init
 ```
+
+Or run it without installing:
+
+```bash
+bunx skillmesh add owner/repo   # or: npx skillmesh add owner/repo
+```
+
+> Building from source instead? See [Development](#development).
 
 ---
 
@@ -176,17 +184,17 @@ them too. npm registry auth stays in `~/.npmrc` (option 1 above).
 | --- | --- |
 | `init [dir] [--skills-dir <d>] [--mode <link\|copy>] [--project-lock] [-y]` | Register a project (state stored in home; nothing written into the project). |
 | `add [source] [--ref] [--path] [--mode] [--local]` | Fetch and install a skill. Omit `source` to pick (multi-select) from already-cached skills. `--local` keeps it out of the committed project lock. |
-| `remove <name>` | Uninstall a managed skill and drop it from the lockfiles (store cache kept). |
-| `update [name]` | Re-fetch a skill (or all) from its recorded source and reinstall. |
+| `remove [name]` | Uninstall managed skills and drop them from the lockfiles (store cache kept). Omit `name` to pick (multi-select) from the installed skills. |
+| `update [name]` | Re-fetch a skill from its recorded source and reinstall. Omit `name` to update **all** managed skills. |
 | `sync` | Install skills declared in the lockfile that are missing locally (e.g. after cloning). |
 | `list` | List skills in the project (managed and project-local) with status. |
-| `cache list \| remove <name[@version]>` (alias `store`) | Inspect or prune the global cache of fetched skills (shared across all projects). |
+| `cache list \| remove [name[@version]]` (alias `store`) | Inspect or prune the global cache of fetched skills (shared across all projects). `remove` with no target picks (multi-select) from the cache. |
 | `auth add <host> [--token] [--scheme] [--username] \| list \| remove <host>` | Manage per-host credentials for private git-over-HTTPS and tarball sources (stored in `~/.skillmesh/auth.json`). |
 | `validate` | Validate installed skills against the agentskills.io standard. |
 | `status` (alias `doctor`) | Report install health for the active project: missing skills, broken links and lockfile drift. |
 | `stats` | Show the skillmesh home path plus a summary of the cached store, tracked projects, plugins and the active project. |
-| `preset list \| create <name> \| add <name> [source] \| remove <name> <source> \| delete <name> \| apply <name>` | Manage and apply named sets of skills. `add` with no `source` picks from the cache. |
-| `plugin add <source> \| list \| enable <name> \| disable <name> \| remove <name>` | Install/manage ecosystem-wide plugins (source adapters & manifest importers). |
+| `preset list \| create <name> \| add <name> [source] \| remove [name] [source] \| delete [name] \| apply [name]` | Manage and apply named sets of skills. Omit `source` to pick skills from the cache, or `name` to pick a preset. |
+| `plugin add <source> \| list \| enable [name] \| disable [name] \| remove [name]` | Install/manage ecosystem-wide plugins (source adapters & manifest importers). Omit `name` on enable/disable/remove to pick (multi-select). |
 | `import [--mode] [--local]` | Import skills from foreign project manifests detected by enabled plugin importers. |
 | `upgrade` (alias `self-update`) `[--check] [-y]` | Update skillmesh itself to the latest npm release. `--check` only reports; `-y` skips the prompt. |
 
@@ -260,10 +268,27 @@ interactively), so `preset apply` re-fetches from source and the preset stays po
 | `SKILLMESH_PROJECT` | Override the active project path (else: the enclosing initialized project, walking up from cwd → cwd). |
 | `SKILLMESH_NO_AUTO_UPGRADE` | Opt out of the default startup auto-upgrade (fall back to a notice only). |
 | `SKILLMESH_NO_UPDATE_CHECK` | Also suppress the "update available" notice (the auto-upgrade fallback). |
+| `SKILLMESH_DEBUG` | Print full stack traces on failure (default: a clean one-line error message). |
 
 ---
 
 ## Development
+
+Build and run from a clone (no global install needed):
+
+```bash
+bun install
+bun run build                    # bundle the CLI into dist/index.js
+node ./dist/index.js <command>   # run the built CLI under Node
+```
+
+For development you can run the TypeScript entry directly with Bun (no build step):
+
+```bash
+bun run ./src/cli/index.ts <command>
+```
+
+Quality gates:
 
 ```bash
 bun test           # run the test suite (bun:test)
@@ -278,3 +303,9 @@ The shipped CLI runs on Node and Bun. Tests are Bun-only and never shipped; the 
 The code is organized by domain: `config/` (paths, global & per-project state), `skill/`
 (frontmatter, validation, normalization), `manifest/`, `store/`, `link/`, `sources/`, `preset/`
 and `registry/` (orchestration), with the CLI in `cli/`.
+
+---
+
+## License
+
+[MIT](./LICENSE) © Piotr Tarasiuk
