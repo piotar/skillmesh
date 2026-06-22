@@ -46,8 +46,6 @@ export const files = {
   lockfile: "lock.json",
   /** Opt-in committed lockfile written to the project root for team/CI reproducibility. */
   projectRootLock: "skillmesh.lock.json",
-  /** Sidecar manifest written inside a managed skill directory. */
-  sidecar: ".skillmesh.json",
   /** The required skill entry file per the agentskills.io spec. */
   skill: "SKILL.md",
   /** Throttle cache for the startup update check (stored in home). */

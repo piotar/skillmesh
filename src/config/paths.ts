@@ -37,6 +37,14 @@ export function storeSkillDir(name: string, version: string, home: string = home
   return join(storeDir(home), `${name}@${version}`);
 }
 
+/**
+ * Path to a store entry's provenance metadata file — a sibling JSON next to the entry directory
+ * (`<name@version>.json`), so the content directory stays byte-for-byte the fetched artifact.
+ */
+export function storeSkillMetaPath(name: string, version: string, home: string = homeDir()): string {
+  return `${storeSkillDir(name, version, home)}.json`;
+}
+
 /** Encode an absolute project path into a filesystem-safe directory name (Claude-style). */
 export function encodeProjectPath(projectPath: string): string {
   return resolve(projectPath).replace(/[/\\:]/g, "-");

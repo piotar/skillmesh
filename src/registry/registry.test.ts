@@ -7,19 +7,22 @@ import {
   defaultProjectConfig,
   readLockfile,
   readProjectLock,
+  writeLockfile,
   writeProjectConfig,
 } from "../config/project";
 import { linkStatus, uninstallSkill } from "../link/link";
-import { buildManifest } from "../manifest/manifest";
 import { registerPlugin, resetPlugins } from "../plugin/host";
 import { addSourceToPreset } from "../preset/preset";
 import { parseSkillMd } from "../skill/frontmatter";
-import { addToStore, hasStoreSkill } from "../store/store";
+import { addToStore, buildManifest, hasStoreSkill } from "../store/store";
 import type { ProjectConfig } from "../types";
+import { pathExists } from "../util/fs";
 import {
   addSkill,
   addStoredSkill,
   applyPreset,
+  exportLock,
+  importLock,
   listSkills,
   projectStatus,
   removeSkill,
@@ -141,6 +144,20 @@ describe("addSkill", () => {
     await expect(
       addSkill({ projectPath: project, source: { type: "local", path: await makeSource("foo") }, home }),
     ).rejects.toThrow(/not initialized/);
+  });
+
+  test("writes no skillmesh metadata into the installed skill", async () => {
+    const home = await tmp();
+    const project = await initProject(home);
+    await addSkill({
+      projectPath: project,
+      source: { type: "local", path: await makeSource("foo") },
+      mode: "copy", // a real directory we can inspect (a link points at the pristine store anyway)
+      home,
+    });
+    const dir = installedSkillDir(project, ".claude/skills", "foo");
+    expect(await pathExists(join(dir, ".skillmesh.json"))).toBe(false);
+    expect(await pathExists(join(dir, "skillmesh.json"))).toBe(false);
   });
 });
 
@@ -417,6 +434,33 @@ describe("multiple skills dirs (mirror)", () => {
     for (const dir of dirs) {
       expect(await linkStatus(installedSkillDir(project, dir, "foo"))).toBe("link");
     }
+  });
+});
+
+describe("lock export/import", () => {
+  test("exports the effective lock and re-adopts it after the home state is wiped", async () => {
+    const home = await tmp();
+    const project = await initProject(home);
+    await addSkill({ projectPath: project, source: { type: "local", path: await makeSource("foo") }, home });
+
+    const count = await exportLock({ projectPath: project, home });
+    expect(count).toBe(1);
+    expect((await readProjectLock(project))?.skills.map((s) => s.name)).toEqual(["foo"]);
+
+    // Simulate a fresh checkout: empty home lock + the skill gone from disk, committed lock kept.
+    await writeLockfile(project, { version: 1, skills: [] }, home);
+    await uninstallSkill(installedSkillDir(project, ".claude/skills", "foo"));
+
+    const results = await importLock({ projectPath: project, home });
+    expect(results).toContainEqual({ name: "foo", action: "installed" });
+    expect((await readLockfile(project, home)).skills.map((s) => s.name)).toEqual(["foo"]);
+    expect((await listSkills({ projectPath: project, home }))[0]?.status).not.toBe("missing");
+  });
+
+  test("import fails when there is no committed lock", async () => {
+    const home = await tmp();
+    const project = await initProject(home);
+    await expect(importLock({ projectPath: project, home })).rejects.toThrow(/no skillmesh\.lock\.json/i);
   });
 });
 

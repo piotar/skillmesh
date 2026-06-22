@@ -7,11 +7,10 @@
 import { readdir } from "node:fs/promises";
 import { homeDir, projectsDir, storeDir } from "../config/paths";
 import { resolveActiveProject } from "../config/global";
-import { readManifest } from "../manifest/manifest";
 import { isInitialized } from "../config/project";
 import { readPluginsRegistry } from "../plugin/registry";
 import { listSkills, projectStatus } from "../registry/registry";
-import { listStore } from "../store/store";
+import { listStore, readStoreMeta } from "../store/store";
 import type { SourceType } from "../types";
 import { dirSize } from "../util/fs";
 
@@ -71,7 +70,7 @@ async function collectStoreStats(home: string): Promise<StoreStats> {
 
   for (const entry of entries) {
     names.add(entry.name);
-    const manifest = await readManifest(entry.path);
+    const manifest = await readStoreMeta(entry.name, entry.version, home);
     if (manifest) bySource[manifest.source.type] = (bySource[manifest.source.type] ?? 0) + 1;
   }
 

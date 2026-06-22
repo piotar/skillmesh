@@ -104,24 +104,33 @@ rewritten to match the directory and the shared store must not be mutated.
 Because the store is shared across every project, a skill fetched once can be reused anywhere
 **without re-downloading**: run `skillmesh add` with no source to pick from the cache (multi-select),
 or `skillmesh preset add <name>` with no source to compose a preset the same way. Cache installs
-materialize content straight from the store but record the skill's **original origin** (from its
-sidecar manifest), so `update` still re-fetches from source and presets stay portable. Browse and
-prune the cache with `skillmesh cache list` / `skillmesh cache remove <name[@version]>`.
+materialize content straight from the store but record the skill's **original origin** (from the
+store entry's provenance metadata), so `update` still re-fetches from source and presets stay
+portable. Browse and prune the cache with `skillmesh cache list` / `skillmesh cache remove
+<name[@version]>`.
 
-### Sidecar manifest
+### Pristine skills, managed by the lockfile
 
-Each managed skill carries a `.skillmesh.json` sidecar (its source + version). Its presence is what
-distinguishes a **managed** skill from a **project-local** (hand-authored) one.
+An installed skill directory is **byte-for-byte the upstream artifact** — skillmesh writes no marker
+file next to your `SKILL.md`. Whether a skill is **managed** (vs **project-local**, hand-authored) is
+derived from the lockfile; a skill installed as a link counts too, so `doctor` can still flag a
+store-linked skill that isn't recorded. Store provenance (a skill's origin source + version) lives in
+a sibling `<name@version>.json` next to the content directory in the global store, never inside it.
 
 ### Two lockfiles (optional)
 
 - The **home lock** always records what's installed on this machine.
 - An opt-in **project lock** (`skillmesh.lock.json`, committed to git) records the shareable set for
-  the team/CI. Enable it with `skillmesh init --project-lock`.
+  the team/CI. Enable continuous maintenance with `skillmesh init --project-lock`.
 
 When both exist they are merged into the effective set; on a name conflict the **committed project
 lock wins**, and the home lock contributes any local-only skills. A fresh clone runs
 `skillmesh sync` to install everything declared in the committed lock.
+
+**Round-trip on demand.** If you keep `projectLock` off but occasionally want to commit, use
+`skillmesh lock export` to write `skillmesh.lock.json` from the current managed skills, and
+`skillmesh lock import` to adopt a committed `skillmesh.lock.json` back into local state and install
+its skills (fold-in + `sync` in one step) — no need to enable continuous project-lock.
 
 ### Name conflicts & the standard
 
@@ -156,8 +165,8 @@ Two ways to authenticate against private hosts:
 2. **`skillmesh auth`** — a per-host token store for the cases the above don't cover: **git over
    HTTPS** and **private tarball** downloads. Tokens live in one place (`~/.skillmesh/auth.json`,
    keyed by host) so updating many private repos needs no environment juggling, and they are injected
-   only at fetch time — **never written into the lockfile, sidecar or any source URL**, so a token
-   typed once cannot leak into your project.
+   only at fetch time — **never written into the lockfile, store metadata or any source URL**, so a
+   token typed once cannot leak into your project.
 
 ```bash
 skillmesh auth add gitlab.example.com               # prompts for the token (hidden input)
@@ -187,6 +196,7 @@ them too. npm registry auth stays in `~/.npmrc` (option 1 above).
 | `remove [name]` | Uninstall managed skills and drop them from the lockfiles (store cache kept). Omit `name` to pick (multi-select) from the installed skills. |
 | `update [name]` | Re-fetch a skill from its recorded source and reinstall. Omit `name` to update **all** managed skills. |
 | `sync` | Install skills declared in the lockfile that are missing locally (e.g. after cloning). |
+| `lock export \| import` | `export` writes `skillmesh.lock.json` from the current managed skills (for committing); `import` adopts a committed `skillmesh.lock.json` into local state and installs its skills. |
 | `list` | List skills in the project (managed and project-local) with status. |
 | `cache list \| remove [name[@version]]` (alias `store`) | Inspect or prune the global cache of fetched skills (shared across all projects). `remove` with no target picks (multi-select) from the cache. |
 | `auth add <host> [--token] [--scheme] [--username] \| list \| remove <host>` | Manage per-host credentials for private git-over-HTTPS and tarball sources (stored in `~/.skillmesh/auth.json`). |

@@ -75,8 +75,8 @@ export type SkillFrontmatter = {
   allowedTools?: string;
 };
 
-/** Sidecar manifest written inside a managed skill (`.skillmesh.json`).
- *  Its presence is what distinguishes a managed skill from a project-local one. */
+/** Provenance metadata for a store entry, kept in a sibling file next to the content directory.
+ *  Records where a cached skill came from so it can be reinstalled from cache and shown in `list`. */
 export type SkillManifest = {
   name: string;
   source: SourceSpec;
