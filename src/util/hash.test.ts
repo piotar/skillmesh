@@ -2,7 +2,6 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { files } from "../constants";
 import { ensureDir } from "./fs";
 import { hashDir } from "./hash";
 
@@ -43,10 +42,10 @@ describe("hashDir", () => {
     expect(await hashDir(a)).not.toBe(await hashDir(b));
   });
 
-  test("the sidecar is excluded from the hash", async () => {
+  test("every file in the (pristine) content directory counts toward the hash", async () => {
     const dir = await makeSkill({ "SKILL.md": "x" });
     const before = await hashDir(dir);
-    await Bun.write(join(dir, files.sidecar), JSON.stringify({ name: "x" }));
-    expect(await hashDir(dir)).toBe(before);
+    await Bun.write(join(dir, "extra.json"), JSON.stringify({ name: "x" }));
+    expect(await hashDir(dir)).not.toBe(before);
   });
 });

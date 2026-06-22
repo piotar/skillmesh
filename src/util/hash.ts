@@ -3,7 +3,6 @@
 import { createHash } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
-import { files } from "../constants";
 
 /** Recursively collect absolute paths of all files under a directory. */
 async function listFiles(dir: string): Promise<string[]> {
@@ -18,13 +17,10 @@ async function listFiles(dir: string): Promise<string[]> {
 
 /**
  * Compute a deterministic sha256 over a directory's relative file paths and contents.
- * The skillmesh sidecar is excluded so a skill's hash reflects its content, not our metadata.
+ * Store content directories are pristine (provenance lives in a sibling file), so every file counts.
  */
 export async function hashDir(dir: string): Promise<string> {
-  const all = await listFiles(dir);
-  const tracked = all
-    .filter((file) => relative(dir, file) !== files.sidecar)
-    .sort((a, b) => a.localeCompare(b));
+  const tracked = (await listFiles(dir)).sort((a, b) => a.localeCompare(b));
 
   const hash = createHash("sha256");
   for (const file of tracked) {

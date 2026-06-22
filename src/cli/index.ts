@@ -10,6 +10,7 @@ import { cacheCommand } from "./commands/cache";
 import { importCommand } from "./commands/import";
 import { initCommand } from "./commands/init";
 import { listCommand } from "./commands/list";
+import { lockCommand } from "./commands/lock";
 import { pluginCommand } from "./commands/plugin";
 import { presetCommand } from "./commands/preset";
 import { removeCommand } from "./commands/remove";
@@ -34,6 +35,7 @@ const main = defineCommand({
     remove: removeCommand,
     update: updateCommand,
     sync: syncCommand,
+    lock: lockCommand,
     list: listCommand,
     cache: cacheCommand,
     store: cacheCommand,

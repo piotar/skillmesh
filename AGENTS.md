@@ -37,7 +37,7 @@ bun run typecheck                  # tsc --noEmit
 bun run lint                       # eslint
 ```
 
-CLI subcommands: `init`, `add`, `remove`, `update`, `sync`, `list`, `cache`/`store`, `validate`, `status`/`doctor`, `stats`, `preset`, `plugin`, `import`, `upgrade`/`self-update`. See `README.md` for full flag/source documentation.
+CLI subcommands: `init`, `add`, `remove`, `update`, `sync`, `lock` (`export`/`import`), `list`, `cache`/`store`, `validate`, `status`/`doctor`, `stats`, `preset`, `plugin`, `import`, `upgrade`/`self-update`. See `README.md` for full flag/source documentation.
 
 `add` and `preset add` take their source positional as **optional**: when omitted (and on a TTY) they
 open an interactive multi-select over the global store via `pickCachedSkills` (`src/cli/cachePicker.ts`,
@@ -64,9 +64,9 @@ Organized by domain; types are dependency-free in `src/types.ts` to avoid cycles
 - `src/config/` — `paths.ts` (pure path resolution), global & per-project config
 - `src/skill/` — frontmatter parse, validation, name normalization (agentskills.io spec)
 - `src/sources/` — resolve a source string → fetch (`local`, `git`, `github`, `npm`, `tarball`)
-- `src/store/` — global content store (`name@version`)
+- `src/store/` — global content store (`name@version`): pristine content dirs + sibling
+  `<name@version>.json` provenance metadata (`buildManifest`/`readStoreMeta`/`writeStoreMeta`)
 - `src/link/` — link (junction/symlink) vs copy installs
-- `src/manifest/` — `.skillmesh.json` sidecar that marks a skill as managed
 - `src/registry/` — orchestration (the "do the work" layer)
 - `src/preset/` — named sets of sources
 - `src/plugin/` — plugin host + lifecycle (extends source dispatch and adds manifest importers)
@@ -98,11 +98,11 @@ default-exports a `Plugin` (`src/plugin/types.ts`): `meta` + optional `sources` 
 
 ### Key design invariants (don't break these)
 
-- **Nothing but skills in the project.** Config + lockfiles live in `~/.skillmesh/` (overridable via `SKILLMESH_HOME`), keyed by an encoded project path. The only project write is the skills under the configured `skillsDirs` (default `[".claude/skills"]`).
+- **Nothing but skills in the project.** Config + lockfiles live in `~/.skillmesh/` (overridable via `SKILLMESH_HOME`), keyed by an encoded project path. The only project write is the skills under the configured `skillsDirs` (default `[".claude/skills"]`) — installed skill directories are byte-for-byte the upstream artifact, with **no** in-tree marker. "Managed" is derived from the lockfile (a skill installed as a link also counts, so `doctor` can flag store-linked-but-unlocked skills); see `scanInstalled` in `src/registry/scan.ts`.
 - **`skillsDirs` is a list (mirror model).** A managed skill is materialized into *every* configured dir (one per agent, e.g. `.claude/skills` + `.codex/skills`); `add`/`update`/`remove`/`sync` operate across all of them, and `doctor` flags a skill missing from *any* dir. Legacy single-`skillsDir` configs are migrated on read (`migrateConfig` in `src/config/project.ts`).
 - `src/config/paths.ts` functions are **pure** — paths depend only on inputs (and ENV only when explicitly passed).
-- The store is shared and **immutable per `name@version`**; renamed skills are always *copied* (their `SKILL.md` name is rewritten), never linked.
-- Two optional lockfiles: home lock (always) + committed project lock (`skillmesh.lock.json`, opt-in). On conflict the committed project lock wins.
+- The store is shared and **immutable per `name@version`**; content dirs are pristine (provenance is a sibling `<name@version>.json`, not written inside). Renamed skills are always *copied* (their `SKILL.md` name is rewritten), never linked.
+- Two optional lockfiles: home lock (always) + committed project lock (`skillmesh.lock.json`, opt-in). On conflict the committed project lock wins. `lock export`/`lock import` round-trip the committed lock on demand without enabling continuous `projectLock`.
 - Env overrides: `SKILLMESH_HOME`, `SKILLMESH_PROJECT`.
 
 ## Conventions

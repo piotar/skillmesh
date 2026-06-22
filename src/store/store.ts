@@ -6,11 +6,29 @@
 import { readdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { files } from "../constants";
-import { storeDir, storeSkillDir } from "../config/paths";
-import { readManifest, writeManifest } from "../manifest/manifest";
+import { storeDir, storeSkillDir, storeSkillMetaPath } from "../config/paths";
 import { parseSkillMd } from "../skill/frontmatter";
 import type { SkillManifest, SourceSpec } from "../types";
-import { copyDir, ensureDir, isDirectory, readText } from "../util/fs";
+import { copyDir, ensureDir, isDirectory, readJson, readText, writeJson } from "../util/fs";
+
+/** Build a store entry's provenance metadata, stamping the current install time. */
+export function buildManifest(input: Omit<SkillManifest, "installedAt">): SkillManifest {
+  return { ...input, installedAt: new Date().toISOString() };
+}
+
+/** Read a store entry's provenance metadata, or null when absent. */
+export function readStoreMeta(
+  name: string,
+  version: string,
+  home?: string,
+): Promise<SkillManifest | null> {
+  return readJson<SkillManifest>(storeSkillMetaPath(name, version, home));
+}
+
+/** Write a store entry's provenance metadata (sibling to the content directory). */
+export async function writeStoreMeta(manifest: SkillManifest, home?: string): Promise<void> {
+  await writeJson(storeSkillMetaPath(manifest.name, manifest.version, home), manifest);
+}
 
 /** A skill present in the store. */
 export type StoreEntry = {
@@ -21,7 +39,7 @@ export type StoreEntry = {
 
 /** A store entry enriched with the data needed to display and reinstall it from cache. */
 export type StoreListing = StoreEntry & {
-  /** Original origin source, read from the entry's sidecar manifest (absent when unmanaged). */
+  /** Original origin source, read from the entry's provenance metadata (absent when unknown). */
   source?: SourceSpec;
   /** The skill's one-line description, read from its SKILL.md (absent when unreadable). */
   description?: string;
@@ -50,7 +68,8 @@ export async function getStoreSkill(
 }
 
 /**
- * Add a fetched skill's content into the store at `name@version`, writing its sidecar manifest.
+ * Add a fetched skill's content into the store at `name@version`, recording its provenance in a
+ * sibling metadata file (the content directory itself stays byte-for-byte the fetched artifact).
  * Any existing entry at the same key is replaced. Returns the store path.
  */
 export async function addToStore(
@@ -62,7 +81,7 @@ export async function addToStore(
   await rm(dest, { recursive: true, force: true });
   await ensureDir(dest);
   await copyDir(contentDir, dest);
-  await writeManifest(dest, manifest);
+  await writeStoreMeta(manifest, home);
   return dest;
 }
 
@@ -88,13 +107,13 @@ export async function listStore(home?: string): Promise<StoreEntry[]> {
  * manifest just leaves `source` undefined (it can be shown but not reinstalled from cache).
  */
 export async function listStoreEntries(home?: string): Promise<StoreListing[]> {
-  return Promise.all((await listStore(home)).map(enrichEntry));
+  return Promise.all((await listStore(home)).map((entry) => enrichEntry(entry, home)));
 }
 
 /** Read an entry's origin source and description, ignoring missing/invalid metadata. */
-async function enrichEntry(entry: StoreEntry): Promise<StoreListing> {
+async function enrichEntry(entry: StoreEntry, home?: string): Promise<StoreListing> {
   const listing: StoreListing = { ...entry };
-  const manifest = await readManifest(entry.path);
+  const manifest = await readStoreMeta(entry.name, entry.version, home);
   if (manifest) listing.source = manifest.source;
   try {
     listing.description = parseSkillMd(await readText(join(entry.path, files.skill))).frontmatter.description;
@@ -114,7 +133,8 @@ export function latestPerName(entries: StoreListing[]): StoreListing[] {
   return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
-/** Remove a skill version from the store (no error when absent). */
+/** Remove a skill version from the store, including its provenance metadata (no error when absent). */
 export async function removeFromStore(name: string, version: string, home?: string): Promise<void> {
   await rm(storeSkillDir(name, version, home), { recursive: true, force: true });
+  await rm(storeSkillMetaPath(name, version, home), { force: true });
 }

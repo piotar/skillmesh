@@ -16,7 +16,6 @@ import {
   writeProjectLock,
 } from "../config/project";
 import { installSkill, linkStatus, uninstallSkill } from "../link/link";
-import { buildManifest, readManifest, writeManifest } from "../manifest/manifest";
 import { setFrontmatterName } from "../skill/frontmatter";
 import { parseSkillMd } from "../skill/frontmatter";
 import { dedupeName, normalizeName } from "../skill/normalize";
@@ -25,7 +24,7 @@ import { sourceEquals } from "../sources/equals";
 import { fetchSource } from "../sources/fetch";
 import { listImporters } from "../plugin/host";
 import { getPreset } from "../preset/preset";
-import { type StoreEntry, addToStore } from "../store/store";
+import { type StoreEntry, addToStore, buildManifest, readStoreMeta } from "../store/store";
 import type { InstallMode, LockEntry, ProjectConfig, SourceSpec } from "../types";
 import { pathExists, readText, writeText } from "../util/fs";
 import { hashDir } from "../util/hash";
@@ -68,12 +67,10 @@ async function resolveFinalName(
   return existing.has(normalized) ? dedupeName(normalized, existing) : normalized;
 }
 
-/** Rewrite a copied skill's SKILL.md and sidecar so its `name` matches the (renamed) directory. */
+/** Rewrite a copied skill's SKILL.md so its `name` matches the (renamed) directory. */
 async function rewriteInstalledName(skillDir: string, name: string): Promise<void> {
   const skillFile = join(skillDir, files.skill);
   await writeText(skillFile, setFrontmatterName(await readText(skillFile), name));
-  const manifest = await readManifest(skillDir);
-  if (manifest) await writeManifest(skillDir, { ...manifest, name });
 }
 
 /** Persist a lock entry to the home lock (always) and the project lock (when project-scoped & enabled). */
@@ -249,10 +246,10 @@ export type AddStoredOptions = {
 export async function addStoredSkill(opts: AddStoredOptions): Promise<AddResult> {
   const config = await requireConfig(opts.projectPath, opts.home);
 
-  const manifest = await readManifest(opts.entry.path);
+  const manifest = await readStoreMeta(opts.entry.name, opts.entry.version, opts.home);
   if (!manifest) {
     throw new Error(
-      `Cached skill '${opts.entry.name}@${opts.entry.version}' has no manifest; re-add it from its source.`,
+      `Cached skill '${opts.entry.name}@${opts.entry.version}' has no metadata; re-add it from its source.`,
     );
   }
   const source = manifest.source;
@@ -442,6 +439,35 @@ export async function syncProject(opts: { projectPath: string; home?: string }):
   return results;
 }
 
+/**
+ * Export the effective lockfile to the committed project-root lock (`skillmesh.lock.json`).
+ * One-shot — works regardless of the `projectLock` config flag — so the home state can be carried
+ * into the project on demand (e.g. just before committing). Returns the number of skills written.
+ */
+export async function exportLock(opts: { projectPath: string; home?: string }): Promise<number> {
+  await requireConfig(opts.projectPath, opts.home);
+  const lock = await readEffectiveLockfile(opts.projectPath, opts.home);
+  await writeProjectLock(opts.projectPath, lock);
+  return lock.skills.length;
+}
+
+/**
+ * Import a committed project-root lock back into the home state, then install anything missing.
+ * Folds each committed entry into the home lock and runs `syncProject`, so a fresh clone (or a
+ * wiped home) can adopt and materialize the committed skills in one step.
+ */
+export async function importLock(opts: { projectPath: string; home?: string }): Promise<SyncResult[]> {
+  await requireConfig(opts.projectPath, opts.home);
+  const committed = await readProjectLock(opts.projectPath);
+  if (!committed) {
+    throw new Error(`No ${files.projectRootLock} found in the project root to import.`);
+  }
+  let home = await readLockfile(opts.projectPath, opts.home);
+  for (const entry of committed.skills) home = upsertEntry(home, entry);
+  await writeLockfile(opts.projectPath, home, opts.home);
+  return syncProject({ projectPath: opts.projectPath, ...(opts.home ? { home: opts.home } : {}) });
+}
+
 /** A row describing a skill in the project, for `list`/`status`. */
 export type SkillListing = {
   name: string;
@@ -459,7 +485,8 @@ export async function listSkills(opts: {
 }): Promise<SkillListing[]> {
   const config = await requireConfig(opts.projectPath, opts.home);
   const lock = await readEffectiveLockfile(opts.projectPath, opts.home);
-  const scanned = await scanInstalled(opts.projectPath, config.skillsDirs);
+  const managedNames = new Set(lock.skills.map((s) => s.name));
+  const scanned = await scanInstalled(opts.projectPath, config.skillsDirs, managedNames);
   const byName = new Map(scanned.map((s) => [s.name, s]));
 
   const out: SkillListing[] = [];
@@ -592,7 +619,8 @@ export async function projectStatus(opts: {
 }): Promise<DoctorReport> {
   const config = await requireConfig(opts.projectPath, opts.home);
   const lock = await readEffectiveLockfile(opts.projectPath, opts.home);
-  const scanned = await scanInstalled(opts.projectPath, config.skillsDirs);
+  const managedNames = new Set(lock.skills.map((s) => s.name));
+  const scanned = await scanInstalled(opts.projectPath, config.skillsDirs, managedNames);
   const byName = new Map(scanned.map((s) => [s.name, s]));
 
   const ok: string[] = [];

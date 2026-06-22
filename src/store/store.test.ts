@@ -2,10 +2,9 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { files } from "../constants";
-import { readManifest } from "../manifest/manifest";
+import { storeSkillMetaPath } from "../config/paths";
 import type { SkillManifest } from "../types";
-import { ensureDir } from "../util/fs";
+import { ensureDir, pathExists } from "../util/fs";
 import {
   addToStore,
   getStoreSkill,
@@ -13,6 +12,7 @@ import {
   latestPerName,
   listStore,
   listStoreEntries,
+  readStoreMeta,
   removeFromStore,
 } from "./store";
 
@@ -48,14 +48,18 @@ afterAll(async () => {
 });
 
 describe("store", () => {
-  test("addToStore copies content and writes the sidecar", async () => {
+  test("addToStore copies pristine content and records provenance in a sibling file", async () => {
     const home = await tmp("skillmesh-home-");
     const content = await makeContent("foo");
     const mf = manifest("foo", "v1");
 
     const dest = await addToStore(content, mf, home);
     expect(await Bun.file(join(dest, "SKILL.md")).exists()).toBe(true);
-    expect(await readManifest(dest)).toEqual(mf);
+    // The content directory stays byte-for-byte the fetched artifact: no metadata inside it.
+    expect(await pathExists(join(dest, ".skillmesh.json"))).toBe(false);
+    expect(await pathExists(join(dest, "skillmesh.json"))).toBe(false);
+    // Provenance lives in a sibling file next to the entry directory.
+    expect(await readStoreMeta("foo", "v1", home)).toEqual(mf);
     expect(await hasStoreSkill("foo", "v1", home)).toBe(true);
   });
 
@@ -101,10 +105,10 @@ describe("store", () => {
     });
   });
 
-  test("listStoreEntries tolerates a missing manifest", async () => {
+  test("listStoreEntries tolerates missing provenance metadata", async () => {
     const home = await tmp("skillmesh-home-");
-    const dest = await addToStore(await makeContent("foo"), manifest("foo", "v1"), home);
-    await rm(join(dest, files.sidecar)); // unmanaged entry: source can't be resolved
+    await addToStore(await makeContent("foo"), manifest("foo", "v1"), home);
+    await rm(storeSkillMetaPath("foo", "v1", home)); // no metadata: source can't be resolved
 
     const [entry] = await listStoreEntries(home);
     expect(entry?.source).toBeUndefined();
