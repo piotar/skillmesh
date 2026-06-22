@@ -50,16 +50,20 @@ export async function latestVersion(opts: { timeoutMs?: number } = {}): Promise<
   const registry = await resolveRegistry();
   const headers: Record<string, string> = { accept: "application/vnd.npm.install-v1+json" };
   if (registry.token) headers.authorization = `Bearer ${registry.token}`;
-  const res = await fetch(`${registry.url}/${pkg.name}/latest`, {
+  // Fetch the full packument, not `/{pkg}/latest`: the abbreviated install-v1 media type is only
+  // negotiable on the packument endpoint. Registry proxies (Artifactory/Nexus/Verdaccio) return
+  // 406 Not Acceptable when that Accept header hits the version-specific endpoint.
+  const res = await fetch(`${registry.url}/${pkg.name}`, {
     headers,
     signal: opts.timeoutMs ? AbortSignal.timeout(opts.timeoutMs) : undefined,
   });
   if (!res.ok) throw new Error(`Registry returned ${res.status} for ${pkg.name}`);
-  const data = (await res.json()) as { version?: unknown };
-  if (typeof data.version !== "string") {
+  const data = (await res.json()) as { "dist-tags"?: { latest?: unknown } };
+  const latest = data["dist-tags"]?.latest;
+  if (typeof latest !== "string") {
     throw new Error(`Unexpected registry response for ${pkg.name}`);
   }
-  return data.version;
+  return latest;
 }
 
 /** Compare the running version against the registry's latest. */
