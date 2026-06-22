@@ -254,6 +254,112 @@ A plugin package declares itself via a `skillmesh` field in its `package.json`
 `Plugin` (`{ meta, sources?, importers? }`). Enabled plugins are loaded **in-process** on every
 command — only install plugins you trust. Plugins declaring a different `apiVersion` are skipped.
 
+A source adapter's `fetch(payload, ctx)` and an importer's `load(projectDir, ctx)` receive a
+read-only `PluginContext` — `{ home, headerForUrl(url) }`. `headerForUrl` resolves a private host's
+credential from skillmesh's own store (`skillmesh auth`), so an adapter fetching from an
+authenticated registry reuses the configured token instead of re-reading `auth.json` itself.
+
+#### The plugin contract (copy this)
+
+skillmesh has no runtime types to import, so a plugin is structurally typed against this contract —
+copy it into your plugin (e.g. `types.ts`) and implement it. It mirrors `src/plugin/types.ts`.
+
+```ts
+/** What your plugin module default-exports. */
+export type Plugin = {
+  meta: { name: string; apiVersion: 1 };
+  sources?: SourceAdapter[];     // new `scheme:` source kinds
+  importers?: ManifestImporter[]; // foreign-manifest importers
+};
+
+/** Read-only handle skillmesh passes to fetch()/load(). */
+export type PluginContext = {
+  /** The resolved skillmesh home directory. */
+  home: string;
+  /** Auth header for a URL, resolved from skillmesh's per-host store (`skillmesh auth`), or undefined. */
+  headerForUrl(url: string): Promise<AuthHeader | undefined>;
+};
+export type AuthHeader = { name: string; value: string };
+
+/** The outcome of fetching a source: a directory holding a SKILL.md, plus its version + cleanup. */
+export type FetchResult = {
+  dir: string;
+  version: string;
+  cleanup: () => Promise<void>;
+};
+
+/** Teaches skillmesh a new source kind, claimed by a `scheme:` prefix on the CLI. */
+export type SourceAdapter = {
+  /** Unique id for this adapter; also the `adapter` field of the sources it emits. */
+  type: string;
+  /** CLI prefix this adapter claims, e.g. "pypi" → `skillmesh add pypi:requests`. */
+  scheme?: string;
+  /** Parse a raw CLI string into your opaque payload, or null when it isn't yours. */
+  parse(input: string): Record<string, unknown> | null;
+  /** Download + extract the payload into a local skill dir. */
+  fetch(payload: Record<string, unknown>, ctx: PluginContext): Promise<FetchResult>;
+  /** Optional one-line origin shown in `list`/`preset list`. */
+  describe?(payload: Record<string, unknown>): string;
+  /** Optional structural equality (defaults to a deep value comparison). */
+  equals?(a: Record<string, unknown>, b: Record<string, unknown>): boolean;
+};
+
+/** Reads a foreign manifest and expands it into skill sources for `skillmesh import`. */
+export type ManifestImporter = {
+  name: string;
+  detect(projectDir: string): boolean | Promise<boolean>;
+  /** Return sources to add; for plugin-fetched skills emit a PluginSourceSpec. */
+  load(projectDir: string, ctx: PluginContext): Promise<SourceSpec[]>;
+};
+
+/** A source resolved by your own adapter — the variant a plugin produces. */
+export type PluginSourceSpec = {
+  type: "plugin";
+  adapter: string; // must equal your SourceAdapter.type
+  payload: Record<string, unknown>;
+};
+
+/** What an importer may return: your plugin source, or any built-in skillmesh source
+ *  (git/github/npm/tarball/local), kept loose here so you don't have to copy the whole union. */
+export type SourceSpec = PluginSourceSpec | { type: string; [key: string]: unknown };
+```
+
+Minimal skeleton — `package.json` plus the entry module:
+
+```jsonc
+// package.json
+{ "skillmesh": { "plugin": "./index.js", "apiVersion": 1 } }
+```
+
+```ts
+// index.ts (build/ship as index.js — skillmesh dynamic-imports it under Node)
+import type { Plugin } from "./types";
+
+const plugin: Plugin = {
+  meta: { name: "my-plugin", apiVersion: 1 },
+  sources: [
+    {
+      type: "myreg",
+      scheme: "myreg",
+      parse: (input) => (input.startsWith("myreg:") ? { id: input.slice(6) } : null),
+      async fetch(payload, ctx) {
+        const url = `https://registry.example.com/${payload.id}.tgz`;
+        const header = await ctx.headerForUrl(url); // reuse `skillmesh auth` credentials
+        // …download to a temp dir, extract so SKILL.md sits at its root…
+        return { dir: "/tmp/extracted", version: "1.0.0", cleanup: async () => {} };
+      },
+      describe: (payload) => String(payload.id),
+    },
+  ],
+};
+
+export default plugin;
+```
+
+> The entry must be runnable JS *as installed* — skillmesh copies the plugin dir into
+> `~/.skillmesh/plugins/` and dynamically imports it under Node, with **no build step on install**.
+> So either ship plain ESM `.js`, or commit your built output and point `skillmesh.plugin` at it.
+
 ### Presets
 
 A preset is a named set of skill sources (one source may live in several presets):

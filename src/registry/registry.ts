@@ -23,6 +23,7 @@ import { validateFrontmatter, validateNameMatchesDir } from "../skill/validate";
 import { sourceEquals } from "../sources/equals";
 import { fetchSource } from "../sources/fetch";
 import { listImporters } from "../plugin/host";
+import { buildPluginContext } from "../plugin/context";
 import { getPreset } from "../preset/preset";
 import { type StoreEntry, addToStore, buildManifest, readStoreMeta } from "../store/store";
 import type { InstallMode, LockEntry, ProjectConfig, SourceSpec } from "../types";
@@ -182,7 +183,7 @@ export async function addSkill(opts: AddOptions): Promise<AddResult> {
     throw new Error(`This source is already added as '${duplicate.name}'. Use 'update' instead.`);
   }
 
-  const fetched = await fetchSource(opts.source);
+  const fetched = await fetchSource(opts.source, opts.home);
   try {
     const declared = await declaredName(fetched.dir);
     const canonical = normalizeName(declared);
@@ -323,7 +324,7 @@ export async function updateSkill(opts: {
   const entry = findEntry(await readEffectiveLockfile(opts.projectPath, opts.home), opts.name);
   if (!entry) throw new Error(`Not a managed skill: ${opts.name}`);
 
-  const fetched = await fetchSource(entry.source);
+  const fetched = await fetchSource(entry.source, opts.home);
   try {
     const declared = await declaredName(fetched.dir);
     const canonical = normalizeName(declared);
@@ -403,7 +404,7 @@ export async function syncProject(opts: { projectPath: string; home?: string }):
       continue;
     }
 
-    const fetched = await fetchSource(entry.source);
+    const fetched = await fetchSource(entry.source, opts.home);
     try {
       const declared = await declaredName(fetched.dir);
       const canonical = normalizeName(declared);
@@ -572,9 +573,10 @@ export async function importManifests(opts: {
   const applied: AddResult[] = [];
   const skipped: ImportResult["skipped"] = [];
 
+  const ctx = buildPluginContext(opts.home);
   for (const importer of listImporters()) {
     if (!(await importer.detect(opts.projectPath))) continue;
-    const sources = await importer.load(opts.projectPath);
+    const sources = await importer.load(opts.projectPath, ctx);
     detected.push({ importer: importer.name, sources });
     for (const source of sources) {
       try {
