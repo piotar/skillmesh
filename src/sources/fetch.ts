@@ -2,6 +2,7 @@
 
 import type { SourceSpec } from "../types";
 import { fetchViaPlugin } from "../plugin/host";
+import { buildPluginContext } from "../plugin/context";
 import { fetchGit } from "./git";
 import { fetchGithub } from "./github";
 import { fetchLocal } from "./local";
@@ -9,8 +10,13 @@ import { fetchNpm } from "./npm";
 import { fetchTarball } from "./tarball";
 import type { FetchResult } from "./types";
 
-/** Materialize any supported source into a local directory with a resolved version. */
-export function fetchSource(source: SourceSpec): Promise<FetchResult> {
+/**
+ * Materialize any supported source into a local directory with a resolved version. `home` is only
+ * consumed by plugin sources, to build the PluginContext (so the adapter resolves credentials
+ * against the same home skillmesh is using); built-in fetchers read auth from the resolved home
+ * themselves.
+ */
+export function fetchSource(source: SourceSpec, home?: string): Promise<FetchResult> {
   switch (source.type) {
     case "local":
       return fetchLocal(source);
@@ -23,6 +29,6 @@ export function fetchSource(source: SourceSpec): Promise<FetchResult> {
     case "tarball":
       return fetchTarball(source);
     case "plugin":
-      return fetchViaPlugin(source);
+      return fetchViaPlugin(source, buildPluginContext(home));
   }
 }

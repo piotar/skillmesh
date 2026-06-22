@@ -6,7 +6,7 @@
 
 import type { PluginSource } from "../types";
 import type { FetchResult } from "../sources/types";
-import type { ManifestImporter, Plugin, SourceAdapter } from "./types";
+import type { ManifestImporter, Plugin, PluginContext, SourceAdapter } from "./types";
 
 const adapters = new Map<string, SourceAdapter>();
 const importers: ManifestImporter[] = [];
@@ -47,15 +47,15 @@ export function parseViaPlugins(raw: string): PluginSource | null {
   return null;
 }
 
-/** Materialize a plugin source via its owning adapter. */
-export async function fetchViaPlugin(source: PluginSource): Promise<FetchResult> {
+/** Materialize a plugin source via its owning adapter, passing the plugin context through. */
+export async function fetchViaPlugin(source: PluginSource, ctx: PluginContext): Promise<FetchResult> {
   const adapter = adapters.get(source.adapter);
   if (!adapter) {
     throw new Error(
       `No plugin provides source adapter '${source.adapter}'. Install/enable it with 'skillmesh plugin'.`,
     );
   }
-  return adapter.fetch(source.payload);
+  return adapter.fetch(source.payload, ctx);
 }
 
 /** Stable JSON of a payload for order-independent structural comparison. */

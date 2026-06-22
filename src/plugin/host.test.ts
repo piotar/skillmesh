@@ -11,7 +11,10 @@ import {
   registerPlugin,
   resetPlugins,
 } from "./host";
-import type { Plugin } from "./types";
+import type { Plugin, PluginContext } from "./types";
+
+/** A throwaway context for tests that don't exercise credential resolution. */
+const stubCtx: PluginContext = { home: "/tmp/home", headerForUrl: () => Promise.resolve(undefined) };
 
 /** A demo plugin claiming the `demo:` scheme, plus one importer. */
 function demoPlugin(): Plugin {
@@ -83,8 +86,28 @@ describe("plugin host", () => {
 
   test("fetchViaPlugin throws for an unknown adapter", async () => {
     await expect(
-      fetchViaPlugin({ type: "plugin", adapter: "missing", payload: {} }),
+      fetchViaPlugin({ type: "plugin", adapter: "missing", payload: {} }, stubCtx),
     ).rejects.toThrow(/No plugin provides source adapter/);
+  });
+
+  test("fetchViaPlugin forwards the plugin context to the adapter", async () => {
+    let received: PluginContext | undefined;
+    registerPlugin({
+      meta: { name: "ctx", apiVersion: 1 },
+      sources: [
+        {
+          type: "ctx",
+          scheme: "ctx",
+          parse: () => ({}),
+          fetch: (_payload, ctx) => {
+            received = ctx;
+            return Promise.resolve({ dir: "/tmp/x", version: "1", cleanup: async () => {} });
+          },
+        },
+      ],
+    });
+    await fetchViaPlugin({ type: "plugin", adapter: "ctx", payload: {} }, stubCtx);
+    expect(received).toBe(stubCtx);
   });
 
   test("an empty host leaves parseSource behavior unchanged", () => {

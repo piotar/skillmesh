@@ -79,6 +79,13 @@ declares itself with a `skillmesh` field in its `package.json` (`{ plugin: entry
 default-exports a `Plugin` (`src/plugin/types.ts`): `meta` + optional `sources` (SourceAdapters) and
 `importers` (ManifestImporters).
 
+- **PluginContext** (`src/plugin/types.ts`, built by `src/plugin/context.ts` `buildPluginContext`):
+  a read-only `{ home, headerForUrl(url) }` passed as the 2nd arg to `SourceAdapter.fetch` and
+  `ManifestImporter.load`. `fetchSource(source, home?)` builds it for plugin sources;
+  `importManifests` builds one and passes it to each importer's `load`. `headerForUrl` is the same
+  `config/auth` helper bound to the resolved home, so adapters reuse skillmesh's credential store
+  rather than re-reading `auth.json`. Adding context is additive — `apiVersion` stays `1`.
+
 - **Host** (`src/plugin/host.ts`) is an in-memory singleton, **empty by default** — so
   `parseSource`/`sourceEquals` behave exactly as before with no plugins. Built-in source dispatch
   consults it: `parseSource` falls back to `parseViaPlugins` (matched by the adapter's `scheme:`

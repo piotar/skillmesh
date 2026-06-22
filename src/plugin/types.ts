@@ -6,6 +6,20 @@
 
 import type { SourceSpec } from "../types";
 import type { FetchResult } from "../sources/types";
+import type { AuthHeader } from "../config/auth";
+
+/**
+ * Read-only handle skillmesh passes to a plugin's `fetch`/`load`, so plugins can reuse skillmesh's
+ * own facilities instead of re-implementing them. Notably `headerForUrl` resolves a private host's
+ * credentials from skillmesh's per-host credential store (`~/.skillmesh/auth.json`) — so an adapter
+ * fetching from an authenticated registry need not parse that file or reproduce the header logic.
+ */
+export type PluginContext = {
+  /** The resolved skillmesh home directory backing this invocation. */
+  home: string;
+  /** Resolve the auth header to inject for a URL from skillmesh's credential store, or undefined. */
+  headerForUrl(url: string): Promise<AuthHeader | undefined>;
+};
 
 /**
  * Teaches skillmesh a new source kind. `parse` claims a CLI source string (returning its own
@@ -20,7 +34,7 @@ export type SourceAdapter = {
   /** Parse a raw source string into this adapter's payload, or null if it isn't ours. */
   parse(input: string): Record<string, unknown> | null;
   /** Materialize a parsed payload into a local skill directory with a resolved version. */
-  fetch(payload: Record<string, unknown>): Promise<FetchResult>;
+  fetch(payload: Record<string, unknown>, ctx: PluginContext): Promise<FetchResult>;
   /** Optional one-line origin description (for `list`/`preset list`). */
   describe?(payload: Record<string, unknown>): string;
   /** Optional structural equality for two payloads (defaults to deep value comparison). */
@@ -37,7 +51,7 @@ export type ManifestImporter = {
   /** Whether this importer has something to contribute for the given project directory. */
   detect(projectDir: string): Promise<boolean> | boolean;
   /** Parse the foreign manifest into a list of skill sources. */
-  load(projectDir: string): Promise<SourceSpec[]>;
+  load(projectDir: string, ctx: PluginContext): Promise<SourceSpec[]>;
 };
 
 /** What a plugin module provides. Exported as the module's default (object or `register` fn). */
