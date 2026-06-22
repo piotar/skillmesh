@@ -64,3 +64,20 @@ jobs:
           git push --tags
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # `changeset publish` only creates git tags; GitHub Releases are a separate concept, so make
+      # one per freshly-pushed tag with the matching CHANGELOG section as its body.
+      - name: Create GitHub release(s)
+        if: steps.check.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Notes = the block under the first "## " heading in CHANGELOG.md (drop the heading line).
+          notes="$(awk '/^## /{n++} n==1{print} n==2{exit}' CHANGELOG.md | tail -n +2)"
+          for tag in $(git tag --points-at HEAD); do
+            if gh release view "$tag" >/dev/null 2>&1; then
+              echo "Release $tag already exists; skipping."
+            else
+              gh release create "$tag" --title "$tag" --notes "${notes:-$tag}"
+            fi
+          done
