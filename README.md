@@ -206,6 +206,7 @@ them too. npm registry auth stays in `~/.npmrc` (option 1 above).
 | `preset list \| create <name> \| add <name> [source] \| remove [name] [source] \| delete [name] \| apply [name]` | Manage and apply named sets of skills. Omit `source` to pick skills from the cache, or `name` to pick a preset. |
 | `plugin add <source> \| list \| enable [name] \| disable [name] \| remove [name]` | Install/manage ecosystem-wide plugins (source adapters & manifest importers). Omit `name` on enable/disable/remove to pick (multi-select). |
 | `import [--mode] [--local]` | Import skills from foreign project manifests detected by enabled plugin importers. |
+| `mcp` | Run the read-only MCP skill-discovery server over stdio (same as the `skillmesh-mcp` binary). See [MCP server](#mcp-server-skill-discovery-for-agents). |
 | `upgrade` (alias `self-update`) `[--check] [-y]` | Update skillmesh itself to the latest npm release. `--check` only reports; `-y` skips the prompt. |
 
 ### Keeping skillmesh up to date
@@ -373,6 +374,45 @@ skillmesh preset apply dev         # add all of the preset's skills to the activ
 
 A preset always stores each skill's **origin** source (resolved from the cache when picked
 interactively), so `preset apply` re-fetches from source and the preset stays portable across machines.
+
+---
+
+## MCP server (skill discovery for agents)
+
+skillmesh ships a second binary, `skillmesh-mcp`, that exposes your skills to an agent over the
+[Model Context Protocol](https://modelcontextprotocol.io) (stdio transport). It is **strictly
+read-only**: an agent can browse and read skills, but it never fetches, installs or changes anything.
+Installs stay a deliberate human action via `skillmesh add` — both for supply-chain safety and because
+agents load skills at session start, so a skill installed mid-session only becomes active on the next
+one (every install-relevant response says so).
+
+Tools exposed:
+
+| Tool | Description |
+| --- | --- |
+| `list_installed_skills` | Skills installed in the active project (managed and project-local), with status. |
+| `list_available_skills` | Skills cached in the global store that a human can install — one per name (latest version), with an optional `query` substring filter on name/description. |
+| `list_presets` | Presets (named sets of skill sources) and the origin of each source. |
+| `read_skill` | The full `SKILL.md` of a skill (`name`, optional `version`, optional `scope: store\|project`), so the agent can inspect it before anyone installs it. |
+
+Each cached skill's `SKILL.md` is also offered as an MCP **resource**
+(`skillmesh://store/<name>/SKILL.md`) for clients that let the user attach resources as context.
+
+The active project and store are resolved exactly like the CLI (`SKILLMESH_PROJECT` / `SKILLMESH_HOME`,
+else the enclosing initialized project), so launch the server from — or point it at — your project.
+
+Two equivalent ways to launch it: the standalone `skillmesh-mcp` binary, or `skillmesh mcp` (the same
+server as a subcommand). Register it with a client, e.g. Claude Code:
+
+```bash
+claude mcp add skillmesh -- skillmesh-mcp     # or: -- skillmesh mcp
+```
+
+or as a raw `.mcp.json` entry:
+
+```json
+{ "mcpServers": { "skillmesh": { "command": "skillmesh-mcp" } } }
+```
 
 ---
 
