@@ -11,6 +11,7 @@ import { importCommand } from "./commands/import";
 import { initCommand } from "./commands/init";
 import { listCommand } from "./commands/list";
 import { lockCommand } from "./commands/lock";
+import { mcpCommand } from "./commands/mcp";
 import { pluginCommand } from "./commands/plugin";
 import { presetCommand } from "./commands/preset";
 import { removeCommand } from "./commands/remove";
@@ -47,16 +48,20 @@ const main = defineCommand({
     preset: presetCommand,
     plugin: pluginCommand,
     import: importCommand,
+    mcp: mcpCommand,
     upgrade: upgradeCommand,
     "self-update": upgradeCommand,
   },
 });
 
-/** Skip self-management during `upgrade`/`self-update` itself, and on the help/version banners. */
+/**
+ * Skip self-management during `upgrade`/`self-update` itself, on the help/version banners, and for the
+ * long-lived `mcp` server (an auto-upgrade re-exec must not disrupt a connected client).
+ */
 function selfManages(argv: string[]): boolean {
   if (argv.some((a) => ["--help", "-h", "--version", "-v"].includes(a))) return false;
   const sub = argv.find((a) => !a.startsWith("-"));
-  return sub !== "upgrade" && sub !== "self-update";
+  return sub !== "upgrade" && sub !== "self-update" && sub !== "mcp";
 }
 
 /** Print a failure as a clean one-line message (full stack only under SKILLMESH_DEBUG). */
