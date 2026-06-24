@@ -57,7 +57,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "changeset": "changeset",
-    "version-packages": "changeset version"
+    "version-packages": "changeset version && bun install",
+    "release": "changeset publish"
   },
   "devDependencies": {
     "@changesets/cli": "2.31.0",
