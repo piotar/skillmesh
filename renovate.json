@@ -12,6 +12,11 @@
       "description": "Automerge all dependencies once CI passes",
       "matchPackageNames": ["*"],
       "automerge": true
+    },
+    {
+      "description": "Never automerge major updates; review them manually",
+      "matchUpdateTypes": ["major"],
+      "automerge": false
     }
   ]
 }

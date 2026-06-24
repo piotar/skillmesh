@@ -119,3 +119,20 @@ default-exports a `Plugin` (`src/plugin/types.ts`): `meta` + optional `sources` 
 - **Use camelCase for constants**, not SCREAMING_SNAKE_CASE (`const` already signals immutability) — see `constants.ts` (`envVars`, `dirs`, `files`, `defaults`).
 - Tests live next to source as `*.test.ts`.
 - File-level `/** ... */` doc comment explaining the module's purpose; match the existing comment density.
+
+## Release & CI
+
+- **Versioning:** changesets. For any change that affects the published package, add a changeset
+  (`bun run changeset`) and commit the `.md` alongside the PR. A change with no effect on the package
+  needs no changeset.
+- **CI** (`.github/workflows/ci.yml`): typecheck + lint + test + build on pull requests and pushes to `main`.
+- **Release** (`.github/workflows/release.yml`): on push to `main`, `changesets/action@v1`
+  opens/updates a "Version Packages" PR (bumps the version + writes `CHANGELOG.md`). **Merging that PR**
+  publishes to npm via **OIDC trusted publishing** (no token; provenance is automatic), pushes the
+  `vX.Y.Z` tag and creates the GitHub Release. Requires a trusted publisher configured on npmjs.com
+  (repo `piotar/skillmesh`, workflow `release.yml`).
+- **Cutting a release = just merge the "Version Packages" PR.** No cron, no PAT.
+- **Renovate** (`renovate.json`): weekly dependency PRs, automerge non-major after CI + a 3-day
+  `minimumReleaseAge`; majors are reviewed manually. Dependency bumps do **not** create their own
+  release — they ride into the next changeset-driven publish. For a deps-only release, run
+  `bun run changeset` (patch) with a note about the bumps.
