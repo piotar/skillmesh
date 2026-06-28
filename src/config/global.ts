@@ -2,7 +2,9 @@
 
 import { dirname, resolve } from "node:path";
 import { envVars } from "../constants";
-import type { GlobalConfig } from "../types";
+import { sourceEquals } from "../sources/equals";
+import { normalizeSource } from "../sources/resolve";
+import type { GlobalConfig, Preset, SourceSpec } from "../types";
 import { readJson, writeJson } from "../util/fs";
 import { globalConfigPath } from "./paths";
 import { isInitialized } from "./project";
@@ -12,10 +14,30 @@ function defaultGlobalConfig(): GlobalConfig {
   return { version: 1, presets: {} };
 }
 
+/** Drop later sources that are structurally equal to an earlier one. */
+function dedupeSources(sources: SourceSpec[]): SourceSpec[] {
+  return sources.filter((s, i) => sources.findIndex((o) => sourceEquals(o, s)) === i);
+}
+
+/**
+ * Canonicalize local source paths across all presets, idempotently migrating configs written before
+ * paths were normalized at parse time. Deduplicates afterwards, as differently-spelled local paths
+ * (e.g. relative vs. absolute, or mixed separators) can collapse to the same canonical source.
+ */
+function normalizeConfig(config: GlobalConfig): GlobalConfig {
+  const presets = Object.fromEntries(
+    Object.entries(config.presets).map(([name, preset]): [string, Preset] => [
+      name,
+      { ...preset, sources: dedupeSources(preset.sources.map(normalizeSource)) },
+    ]),
+  );
+  return { ...config, presets };
+}
+
 /** Read the global config, falling back to defaults when it does not exist. */
 export async function readGlobalConfig(home?: string): Promise<GlobalConfig> {
   const data = await readJson<GlobalConfig>(globalConfigPath(home));
-  return data ?? defaultGlobalConfig();
+  return normalizeConfig(data ?? defaultGlobalConfig());
 }
 
 /** Persist the global config to disk. */
