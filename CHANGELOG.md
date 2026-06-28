@@ -1,5 +1,11 @@
 # skillmesh
 
+## 0.4.1
+
+### Patch Changes
+
+- a5c4663: Normalize local source paths to absolute when parsing, so presets stored in the global config resolve the same regardless of the working directory. `~`-rooted paths are kept as-is to stay portable across machines. Configs written before this change are migrated on read: local preset paths are canonicalized and any sources that collapse to the same path are deduplicated.
+
 ## 0.4.0
 
 ### Minor Changes
