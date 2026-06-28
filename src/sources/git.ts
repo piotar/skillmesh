@@ -3,7 +3,7 @@
 import { rm } from "node:fs/promises";
 import type { GitSource } from "../types";
 import { authHeader, hostOf, lookupHostAuth, readAuthConfig } from "../config/auth";
-import type { Fetcher, Materialized } from "./types";
+import type { Fetcher, VersionedMaterialized } from "./types";
 import { exec, makeTempDir, resolveSkillDir } from "./util";
 
 /**
@@ -24,7 +24,7 @@ export async function authConfigArgs(url: string): Promise<string[]> {
 }
 
 /** Clone a repo into a temp dir and check out the requested ref. Version = resolved commit. */
-export async function materializeGit(source: GitSource): Promise<Materialized> {
+export async function materializeGit(source: GitSource): Promise<VersionedMaterialized> {
   const tmp = await makeTempDir("skillmesh-git-");
   const cleanup = () => rm(tmp, { recursive: true, force: true });
   try {
@@ -45,7 +45,7 @@ export const fetchGit: Fetcher<GitSource> = async (source) => {
   const m = await materializeGit(source);
   try {
     const dir = await resolveSkillDir(m.root, source.subpath);
-    return { dir, version: m.version!, cleanup: m.cleanup };
+    return { dir, version: m.version, cleanup: m.cleanup };
   } catch (err) {
     await m.cleanup();
     throw err;

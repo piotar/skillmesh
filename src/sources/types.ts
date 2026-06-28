@@ -28,3 +28,6 @@ export type Materialized = {
   /** Removes any temporary directory created while materializing (no-op for in-place sources). */
   cleanup: () => Promise<void>;
 };
+
+/** A materialized source whose version is intrinsic, so it's always present (git, npm). */
+export type VersionedMaterialized = Materialized & { version: string };
