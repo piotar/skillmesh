@@ -4,7 +4,7 @@ import { readdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import type { NpmSource } from "../types";
 import { ensureDir, isDirectory } from "../util/fs";
-import type { Fetcher, Materialized } from "./types";
+import type { Fetcher, VersionedMaterialized } from "./types";
 import { exec, makeTempDir, npmBin, resolveSkillDir } from "./util";
 
 /** The relevant fields of an `npm pack --json` result. */
@@ -20,7 +20,7 @@ async function packageRoot(dir: string): Promise<string> {
 }
 
 /** Pack an npm package into a temp dir and extract it. Version = npm version. */
-export async function materializeNpm(source: NpmSource): Promise<Materialized> {
+export async function materializeNpm(source: NpmSource): Promise<VersionedMaterialized> {
   const tmp = await makeTempDir("skillmesh-npm-");
   const cleanup = () => rm(tmp, { recursive: true, force: true });
   try {
@@ -45,7 +45,7 @@ export const fetchNpm: Fetcher<NpmSource> = async (source) => {
   const m = await materializeNpm(source);
   try {
     const dir = await resolveSkillDir(m.root, source.subpath);
-    return { dir, version: m.version!, cleanup: m.cleanup };
+    return { dir, version: m.version, cleanup: m.cleanup };
   } catch (err) {
     await m.cleanup();
     throw err;
