@@ -1,3 +1,4 @@
+import { resolve } from "node:path";
 import { afterEach, describe, expect, test } from "bun:test";
 import { parseSource } from "../sources/resolve";
 import { sourceEquals } from "../sources/equals";
@@ -64,7 +65,7 @@ describe("plugin host", () => {
   test("built-in heuristics still win when no scheme matches", () => {
     registerPlugin(demoPlugin());
     expect(parseSource("owner/repo")).toEqual({ type: "github", repo: "owner/repo" });
-    expect(parseSource("./local")).toEqual({ type: "local", path: "./local" });
+    expect(parseSource("./local")).toEqual({ type: "local", path: resolve("./local") });
   });
 
   test("pluginSourceEquals compares adapter + payload structurally", () => {

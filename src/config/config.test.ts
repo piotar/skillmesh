@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { envVars } from "../constants";
 import { pathExists } from "../util/fs";
-import { readGlobalConfig, resolveActiveProject } from "./global";
+import { readGlobalConfig, resolveActiveProject, writeGlobalConfig } from "./global";
 import {
   encodeProjectPath,
   homeDir,
@@ -83,6 +83,36 @@ describe("global config", () => {
     const home = await tmp();
     const config = await readGlobalConfig(home);
     expect(config).toEqual({ version: 1, presets: {} });
+  });
+
+  test("normalizes local preset paths on read, keeping ~ and deduping collapsed sources", async () => {
+    const home = await tmp();
+    // A config written before paths were normalized at parse time: relative, ~-rooted, and two
+    // differently-spelled absolute paths that point at the same directory.
+    await writeGlobalConfig(
+      {
+        version: 1,
+        presets: {
+          team: {
+            name: "team",
+            sources: [
+              { type: "local", path: "./rel/foo" },
+              { type: "local", path: "~/skills/bar" },
+              { type: "local", path: "/x/y" },
+              { type: "local", path: "/x/z/../y" },
+            ],
+          },
+        },
+      },
+      home,
+    );
+
+    const team = (await readGlobalConfig(home)).presets.team;
+    expect(team?.sources).toEqual([
+      { type: "local", path: resolve("./rel/foo") },
+      { type: "local", path: "~/skills/bar" },
+      { type: "local", path: resolve("/x/y") },
+    ]);
   });
 
   test("resolveActiveProject prefers ENV over everything", async () => {

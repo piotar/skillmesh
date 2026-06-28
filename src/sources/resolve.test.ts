@@ -1,13 +1,21 @@
+import { resolve } from "node:path";
 import { describe, expect, test } from "bun:test";
 import { parseSource } from "./resolve";
 
 describe("parseSource — local", () => {
-  test("path-like inputs and file: scheme", () => {
-    expect(parseSource("./skills/foo")).toEqual({ type: "local", path: "./skills/foo" });
-    expect(parseSource("/abs/path")).toEqual({ type: "local", path: "/abs/path" });
+  test("relative paths resolve to absolute (file: scheme included)", () => {
+    expect(parseSource("./skills/foo")).toEqual({ type: "local", path: resolve("./skills/foo") });
+    expect(parseSource("file:./rel")).toEqual({ type: "local", path: resolve("./rel") });
+  });
+
+  test("absolute paths are kept, separators normalized by resolve", () => {
+    expect(parseSource("/abs/path")).toEqual({ type: "local", path: resolve("/abs/path") });
+    expect(parseSource("C:\\skills\\foo")).toEqual({ type: "local", path: resolve("C:\\skills\\foo") });
+  });
+
+  test("~-rooted paths are left untouched for portability", () => {
     expect(parseSource("~/skills/foo")).toEqual({ type: "local", path: "~/skills/foo" });
-    expect(parseSource("C:\\skills\\foo")).toEqual({ type: "local", path: "C:\\skills\\foo" });
-    expect(parseSource("file:./rel")).toEqual({ type: "local", path: "./rel" });
+    expect(parseSource("~")).toEqual({ type: "local", path: "~" });
   });
 });
 

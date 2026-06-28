@@ -1,5 +1,6 @@
 /** Parse a free-form source string (as typed on the CLI) into a typed SourceSpec. */
 
+import { resolve } from "node:path";
 import type {
   GitSource,
   GithubSource,
@@ -13,6 +14,20 @@ import { parseViaPlugins } from "../plugin/host";
 function splitRef(value: string): { value: string; ref?: string } {
   const i = value.indexOf("#");
   return i === -1 ? { value } : { value: value.slice(0, i), ref: value.slice(i + 1) || undefined };
+}
+
+/**
+ * Canonicalize a local path to absolute so presets (stored in the global, cross-project config)
+ * resolve the same regardless of the working directory at apply time. `~`-rooted paths are left
+ * untouched — they expand at materialization and stay portable across machines.
+ */
+function normalizeLocalPath(path: string): string {
+  return path === "~" || path.startsWith("~/") || path.startsWith("~\\") ? path : resolve(path);
+}
+
+/** Canonicalize a source's local path (no-op for non-local sources). */
+export function normalizeSource(source: SourceSpec): SourceSpec {
+  return source.type === "local" ? { ...source, path: normalizeLocalPath(source.path) } : source;
 }
 
 /** Whether a string looks like a filesystem path rather than a remote reference. */
@@ -137,7 +152,8 @@ export function parseSource(input: string): SourceSpec {
   const raw = input.trim();
   if (raw.length === 0) throw new Error("Empty source");
 
-  if (raw.startsWith("file:")) return { type: "local", path: raw.slice("file:".length) };
+  if (raw.startsWith("file:"))
+    return { type: "local", path: normalizeLocalPath(raw.slice("file:".length)) };
   if (raw.startsWith("git+")) return gitSpec(raw.slice("git+".length));
   if (raw.startsWith("github:")) return githubSpec(raw.slice("github:".length));
   if (raw.startsWith("npm:")) return npmSpec(raw.slice("npm:".length));
@@ -148,7 +164,7 @@ export function parseSource(input: string): SourceSpec {
   const viaPlugin = parseViaPlugins(raw);
   if (viaPlugin) return viaPlugin;
 
-  if (isPathLike(raw)) return { type: "local", path: raw };
+  if (isPathLike(raw)) return { type: "local", path: normalizeLocalPath(raw) };
 
   if (/^https?:\/\//.test(raw)) {
     if (isArchiveUrl(raw)) return tarballSpec(raw);
