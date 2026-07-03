@@ -19,11 +19,18 @@ export function makeTempDir(prefix = "skillmesh-fetch-"): Promise<string> {
  * Run a command, returning trimmed stdout and throwing with stderr on a non-zero exit.
  * Uses cross-spawn so Windows `.cmd` shims (e.g. npm.cmd) work under both Node and Bun.
  */
-export function exec(cmd: string[], opts: { cwd?: string; timeoutMs?: number } = {}): Promise<string> {
+export function exec(
+  cmd: string[],
+  opts: { cwd?: string; timeoutMs?: number; env?: NodeJS.ProcessEnv } = {},
+): Promise<string> {
   const [bin, ...args] = cmd;
   if (!bin) throw new Error("exec called with an empty command");
   return new Promise((resolve, reject) => {
-    const proc = spawn(bin, args, { cwd: opts.cwd, stdio: ["ignore", "pipe", "pipe"] });
+    const proc = spawn(bin, args, {
+      cwd: opts.cwd,
+      stdio: ["ignore", "pipe", "pipe"],
+      env: opts.env ? { ...process.env, ...opts.env } : undefined,
+    });
     let stdout = "";
     let stderr = "";
     const timer = opts.timeoutMs
