@@ -23,12 +23,22 @@ export async function authConfigArgs(url: string): Promise<string[]> {
   return ["-c", `http.https://${host}/.extraHeader=${header.name}: ${header.value}`];
 }
 
+/** Clone timeout: long enough for a real clone, short enough to fail fast on a stuck auth prompt. */
+const CLONE_TIMEOUT_MS = 30_000;
+
 /** Clone a repo into a temp dir and check out the requested ref. Version = resolved commit. */
 export async function materializeGit(source: GitSource): Promise<VersionedMaterialized> {
   const tmp = await makeTempDir("skillmesh-git-");
   const cleanup = () => rm(tmp, { recursive: true, force: true });
   try {
-    await exec(["git", ...(await authConfigArgs(source.url)), "clone", source.url, tmp]);
+    // GIT_TERMINAL_PROMPT=0 makes git fail immediately ("terminal prompts disabled") instead of
+    // hanging forever waiting for interactive username/password input when the extraHeader auth
+    // isn't accepted (e.g. a token scheme the host's git-http backend doesn't recognize). The
+    // timeout is a backstop in case some other path still blocks.
+    await exec(["git", ...(await authConfigArgs(source.url)), "clone", source.url, tmp], {
+      timeoutMs: CLONE_TIMEOUT_MS,
+      env: { GIT_TERMINAL_PROMPT: "0" },
+    });
     if (source.ref) {
       await exec(["git", "-C", tmp, "-c", "advice.detachedHead=false", "checkout", source.ref]);
     }
