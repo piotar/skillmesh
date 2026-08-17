@@ -70,7 +70,7 @@
     "@types/cross-spawn": "6.0.6",
     "citty": "0.2.2",
     "cross-spawn": "7.0.6",
-    "eslint": "10.8.0",
+    "eslint": "10.8.1",
     "typescript": "6.0.3",
     "typescript-eslint": "8.66.0",
     "yaml": "2.9.0",
