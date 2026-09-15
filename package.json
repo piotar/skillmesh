@@ -71,7 +71,7 @@
     "citty": "0.2.2",
     "cross-spawn": "7.0.6",
     "eslint": "10.9.1",
-    "typescript": "6.0.3",
+    "typescript": "7.0.2",
     "typescript-eslint": "8.69.0",
     "yaml": "2.9.0",
     "zod": "4.5.4"
